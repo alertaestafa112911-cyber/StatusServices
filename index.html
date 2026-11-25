@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estado de la nube</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --text: #1c1b1f;
+      --text-muted: #5f6368;
+      --border: #e0e0e0;
+      --primary: #1a73e8;
+      --ok: #2E9D57;
+      --degraded: #F2A100;
+      --outage: #D93025;
+      --unknown: #8A8A8A;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212;
+        --surface: #1e1e1e;
+        --text: #e6e1e5;
+        --text-muted: #9aa0a6;
+        --border: #333333;
+        --primary: #8ab4f8;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding-bottom: 40px; }
+
+    header {
+      background: var(--surface);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 { font-size: 1.25rem; font-weight: 600; }
+
+    button.refresh-btn {
+      background: transparent;
+      border: none;
+      color: var(--primary);
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+    button.refresh-btn:hover { background: rgba(138, 180, 248, 0.12); }
+
+    .progress-bar {
+      height: 3px;
+      width: 100%;
+      background: transparent;
+      overflow: hidden;
+    }
+    .progress-bar.loading::after {
+      content: "";
+      display: block;
+      height: 100%;
+      width: 40%;
+      background: var(--primary);
+      animation: slide 1s infinite ease-in-out;
+    }
+    @keyframes slide {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(300%); }
+    }
+
+    main { max-width: 720px; margin: 0 auto; padding: 16px; }
+    .summary { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 14px; }
+
+    .card {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      transition: transform 0.1s;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .dot { border-radius: 50%; flex-shrink: 0; }
+    .dot-OK { background: var(--ok); }
+    .dot-DEGRADED { background: var(--degraded); }
+    .dot-OUTAGE { background: var(--outage); }
+    .dot-UNKNOWN { background: var(--unknown); }
+
+    .color-OK { color: var(--ok); }
+    .color-DEGRADED { color: var(--degraded); }
+    .color-OUTAGE { color: var(--outage); }
+    .color-UNKNOWN { color: var(--unknown); }
+
+    .header-info { flex: 1; margin-left: 12px; }
+    .provider-name { font-size: 1.05rem; font-weight: 600; }
+    .provider-status { font-size: 0.85rem; margin-top: 2px; font-weight: 500; }
+    .arrow { font-size: 1.1rem; color: var(--text-muted); }
+
+    .card-body { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); display: none; }
+    .card.open .card-body { display: block; }
+
+    .incident-item { display: flex; align-items: flex-start; margin-bottom: 10px; }
+    .incident-text { margin-left: 10px; }
+    .incident-title { font-size: 0.95rem; font-weight: 500; }
+    .incident-detail { font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+
+    .services-title { font-size: 0.85rem; font-weight: 600; margin: 12px 0 8px; }
+    .service-row { display: flex; align-items: center; padding: 4px 0; font-size: 0.85rem; }
+    .service-name { flex: 1; margin-left: 8px; }
+    .service-status { font-size: 0.8rem; font-weight: 500; }
+
+    .note { font-size: 0.8rem; color: var(--text-muted); margin-top: 10px; font-style: italic; }
+
+    .official-link {
+      display: inline-block;
+      margin-top: 12px;
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .official-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Estado de la nube</h1>
+    <button class="refresh-btn" onclick="loadStatus()">Actualizar</button>
+  </header>
+  <div id="loader" class="progress-bar"></div>
+
+  <main>
+    <div id="summary" class="summary">Cargando…</div>
+    <div id="list"></div>
+  </main>
+
+  <script>
+    const openStates = {};
+
+    async function loadStatus() {
+      const loader = document.getElementById('loader');
+      loader.classList.add('loading');
+
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        render(data);
+      } catch (err) {
+        document.getElementById('summary').textContent = 'Error al conectar con el servidor.';
+      } finally {
+        loader.classList.remove('loading');
+      }
+    }
+
+    function toggleCard(id) {
+      openStates[id] = !openStates[id];
+      const card = document.getElementById(`card-${id}`);
+      if (card) {
+        card.classList.toggle('open', openStates[id]);
+        card.querySelector('.arrow').textContent = openStates[id] ? '▴' : '▾';
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function render(data) {
+      const providers = data.providers || [];
+      const okCount = providers.filter(p => p.level.key === 'OK').length;
+      document.getElementById('summary').textContent =
+        `${okCount} de ${providers.length} proveedores operativos · ${data.updated}`;
+
+      const list = document.getElementById('list');
+      list.innerHTML = providers.map(p => {
+        if (openStates[p.id] === undefined) {
+          openStates[p.id] = (p.level.key === 'DEGRADED' || p.level.key === 'OUTAGE');
+        }
+        const isOpen = openStates[p.id];
+        const statusText = p.error ? 'No se pudo consultar' : p.level.label;
+
+        let bodyHtml = '';
+        if (p.error) {
+          bodyHtml = `<p class="incident-detail">${escapeHtml(p.error)}</p>`;
+        } else {
+          if (p.incidents.length === 0) {
+            bodyHtml += `<p style="font-size: 0.9rem;">Sin incidencias activas</p>`;
+          } else {
+            bodyHtml += p.incidents.map(inc => `
+              <div class="incident-item">
+                <div class="dot dot-${inc.level.key}" style="width: 10px; height: 10px; margin-top: 5px;"></div>
+                <div class="incident-text">
+                  <div class="incident-title">${escapeHtml(inc.name)}</div>
+                  ${inc.detail ? `<div class="incident-detail">${escapeHtml(inc.detail)}</div>` : ''}
+                </div>
+              </div>
+            `).join('');
+          }
+
+          if (p.services.length > 0) {
+            bodyHtml += `<div class="services-title">Servicios (${p.services.length})</div>`;
+            bodyHtml += p.services.map(sv => `
+              <div class="service-row">
+                <div class="dot dot-${sv.level.key}" style="width: 8px; height: 8px;"></div>
+                <span class="service-name">${escapeHtml(sv.name)}</span>
+                <span class="service-status color-${sv.level.key}">${escapeHtml(sv.level.label)}</span>
+              </div>
+            `).join('');
+          }
+
+          if (p.note) {
+            bodyHtml += `<div class="note">${escapeHtml(p.note)}</div>`;
+          }
+        }
+
+        return `
+          <div id="card-${p.id}" class="card ${isOpen ? 'open' : ''}">
+            <div class="card-header" onclick="toggleCard('${p.id}')">
+              <div class="dot dot-${p.level.key}" style="width: 16px; height: 16px;"></div>
+              <div class="header-info">
+                <div class="provider-name">${escapeHtml(p.name)}</div>
+                <div class="provider-status color-${p.level.key}">${escapeHtml(statusText)}</div>
+              </div>
+              <span class="arrow">${isOpen ? '▴' : '▾'}</span>
+            </div>
+            <div class="card-body">
+              ${bodyHtml}
+              <a class="official-link" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">Abrir página oficial</a>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Carga inicial y refresco cada 2 minutos (120.000 ms)
+    loadStatus();
+    setInterval(loadStatus, 120000);
+  </script>
+</body>
+  </html>
