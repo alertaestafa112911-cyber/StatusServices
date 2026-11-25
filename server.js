@@ -1,11 +1,22 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const { XMLParser } = require('fast-xml-parser');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static(path.join(__dirname, 'index.html')));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
+
+app.get('/', (req, res) => {
+  const inPublic = path.join(__dirname, 'public', 'index.html');
+  const inRoot = path.join(__dirname, 'index.html');
+  if (fs.existsSync(inPublic)) return res.sendFile(inPublic);
+  if (fs.existsSync(inRoot)) return res.sendFile(inRoot);
+  res.send('Servidor activo, pero no se encuentra index.html en: ' + __dirname);
+});
+
 
 // Niveles equivalentes al enum Level en Kotlin
 const LEVELS = {
