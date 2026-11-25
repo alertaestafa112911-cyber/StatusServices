@@ -5,7 +5,7 @@ const { XMLParser } = require('fast-xml-parser');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'index.html')));
 
 // Niveles equivalentes al enum Level en Kotlin
 const LEVELS = {
