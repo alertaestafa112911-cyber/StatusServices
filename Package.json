@@ -1,0 +1,13 @@
+{
+  "name": "cloudstatus-web",
+  "version": "1.0.0",
+  "description": "Monitor de estado de proveedores cloud (M365, Azure, AWS, GCP, Cloudflare)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "fast-xml-parser": "^4.4.1"
+  }
+}
